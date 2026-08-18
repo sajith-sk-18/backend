@@ -1,0 +1,32 @@
+# Keep secrets and local state OUT of the image. Without this, `COPY . .` in the
+# Dockerfile bakes in the local .env -- APP_KEY plus a DB_DATABASE pointing at a Windows
+# SQLite path -- and the dev database file, complete with password hashes.
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-journal
+database/database.sqlite
+
+# Rebuilt inside the image by composer install; a host vendor/ tree is both wasteful
+# and platform-specific.
+vendor/
+node_modules/
+
+# Regenerated at boot by deploy/railway-start.sh, and a stale cached config baked into
+# the image would silently override the real environment variables.
+bootstrap/cache/*.php
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/logs/*
+
+.git/
+.gitignore
+.dockerignore
+Dockerfile
+*.zip
+*.bak
+.phpunit.result.cache
+tests/
+README.md
