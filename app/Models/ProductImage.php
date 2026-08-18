@@ -24,7 +24,15 @@ class ProductImage extends Model
 
     public function getUrlAttribute(): string
     {
-        return $this->path ? Storage::disk('public')->url($this->path) : '';
+        if (!$this->path) {
+            return '';
+        }
+        // Absolute URLs (e.g. seeded stock photos / CDN) are served as-is; stored uploads
+        // resolve via the public disk.
+        if (str_starts_with($this->path, 'http://') || str_starts_with($this->path, 'https://')) {
+            return $this->path;
+        }
+        return Storage::disk('public')->url($this->path);
     }
 
     public function product(): BelongsTo

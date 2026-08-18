@@ -23,6 +23,7 @@ class CategoryController extends Controller
         $data = $request->validate([
             'name'        => 'required|string|max:255|unique:categories,name',
             'description' => 'nullable|string|max:500',
+            'image'       => 'nullable|string|max:1000',
         ]);
         $cat = Category::create($data);
         return response()->json($cat, 201);
@@ -35,6 +36,7 @@ class CategoryController extends Controller
         $data = $request->validate([
             'name'        => "sometimes|required|string|max:255|unique:categories,name,{$id}",
             'description' => 'nullable|string|max:500',
+            'image'       => 'nullable|string|max:1000',
         ]);
         $cat->update($data);
         return response()->json($cat);

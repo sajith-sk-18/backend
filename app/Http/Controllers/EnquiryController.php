@@ -14,34 +14,38 @@ use Illuminate\Validation\Rule;
 class EnquiryController extends Controller
 {
     /**
-     * POST /api/enquiries  (auth:sanctum)
-     * Logged-in customers submit enquiries. Name/email come from the user.
+     * POST /api/enquiries  (public)
+     * Anyone can submit an enquiry. Guests supply their own name/email;
+     * logged-in customers have theirs auto-attached from the account.
      * Optional product_id ties the enquiry to a specific product page.
      */
     public function store(Request $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user) {
-            return response()->json(['message' => 'Please sign in to send an enquiry.'], 401);
-        }
 
+        // All fields are required for an enquiry (name, email, phone, WhatsApp, message).
         $data = $request->validate([
             'product_id' => 'nullable|exists:products,id',
-            'phone'      => 'nullable|string|max:30',
+            'name'       => 'required|string|max:120',
+            'email'      => 'required|email|max:190',
+            'phone'      => 'required|string|max:30',
+            'whatsapp'   => 'required|string|max:30',
             'message'    => 'required|string|min:5|max:2000',
         ]);
 
         $product = !empty($data['product_id']) ? Product::find($data['product_id']) : null;
 
         $enquiry = Enquiry::create([
-            'customer_id' => $user->id,
+            'customer_id' => $user?->id,
             'product_id'  => $product?->id,
-            'name'        => $user->name,
-            'email'       => $user->email,
-            'phone'       => $data['phone'] ?? $user->phone,
+            'name'        => $data['name'],
+            'email'       => $data['email'],
+            'phone'       => $data['phone'],
+            'whatsapp'    => $data['whatsapp'],
             'message'     => $data['message'],
             'status'      => 'new',
         ]);
+        $name = $data['name'];
 
         // Notify admins (user_id NULL = admin feed)
         Notification::create([
@@ -56,7 +60,7 @@ class EnquiryController extends Controller
         ]);
 
         return response()->json([
-            'message' => "Thanks {$user->name}! We'll get back to you soon.",
+            'message' => "Thanks {$name}! We'll get back to you soon.",
             'enquiry' => $enquiry->load('product:id,name,brand'),
         ], 201);
     }

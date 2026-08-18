@@ -25,27 +25,34 @@ class ReviewController extends Controller
     }
 
     /**
-     * POST /api/reviews  (auth:sanctum, lands as is_approved=false)
-     * Logged-in customers post reviews. Name/email come from the user.
-     * One review per user per product.
+     * POST /api/reviews  (public, lands as is_approved=false)
+     * Anyone can post a review. Guests supply their own name/email;
+     * logged-in customers have theirs auto-attached. One review per
+     * email per product.
      */
     public function store(Request $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user) {
-            return response()->json(['message' => 'Please sign in to write a review.'], 401);
-        }
 
-        $data = $request->validate([
+        $rules = [
             'product_id' => 'required|exists:products,id',
             'rating'     => 'required|integer|between:1,5',
             'comment'    => 'required|string|min:5|max:1000',
-        ]);
+        ];
+        // Guests must identify themselves; logged-in users reuse their account.
+        if (!$user) {
+            $rules['name']  = 'required|string|max:120';
+            $rules['email'] = 'required|email|max:190';
+        }
+        $data = $request->validate($rules);
 
-        // One review per user per product (matched by email — the existing
-        // schema doesn't yet have customer_id; Phase 3 will add the FK).
+        $name  = $user?->name  ?? $data['name'];
+        $email = $user?->email ?? $data['email'];
+
+        // One review per email per product (the schema dedupes on
+        // customer_email; a customer_id FK is a future enhancement).
         $already = Review::where('product_id', $data['product_id'])
-            ->where('customer_email', $user->email)
+            ->where('customer_email', $email)
             ->exists();
         if ($already) {
             return response()->json([
@@ -55,8 +62,8 @@ class ReviewController extends Controller
 
         $review = Review::create([
             'product_id'     => $data['product_id'],
-            'customer_name'  => $user->name,
-            'customer_email' => $user->email,
+            'customer_name'  => $name,
+            'customer_email' => $email,
             'rating'         => $data['rating'],
             'comment'        => $data['comment'],
             'is_approved'    => false,

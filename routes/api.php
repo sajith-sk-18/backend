@@ -26,12 +26,8 @@ use Illuminate\Support\Facades\Route;
 // Anonymous endpoints — tight rate limits to discourage credential stuffing /
 // signup spam. Limits are per-IP because there's no authed user yet.
 Route::middleware('throttle:5,1')->post('/auth/login',    [AuthController::class, 'login']);
-Route::middleware('throttle:3,1')->post('/auth/register', [AuthController::class, 'register']);
-
-// Password reset — both throttled. forgot-password always returns 200 so the
-// endpoint can't be used to enumerate registered emails.
-Route::middleware('throttle:3,1')->post('/auth/forgot-password', [ForgotPasswordController::class, 'sendResetLink']);
-Route::middleware('throttle:5,1')->post('/auth/reset-password',  [ForgotPasswordController::class, 'reset']);
+// Customer registration & password reset removed — the storefront has no
+// customer accounts. Admin login (above) + the admin panel are unaffected.
 
 Route::get('/categories', [CategoryController::class, 'index']);
 
@@ -44,6 +40,12 @@ Route::get('/products/{id}/related', [ProductController::class, 'related'])->whe
 Route::get('/upcoming',      [UpcomingProductController::class, 'index']);
 Route::get('/announcements', [AnnouncementController::class,    'index']);
 
+// Customer-submitted writes — PUBLIC. Guests supply their own name/email in
+// the payload; logged-in users have theirs auto-attached by the controller.
+// Throttled per-IP to discourage spam.
+Route::middleware('throttle:10,1')->post('/reviews',   [ReviewController::class,  'store']);
+Route::middleware('throttle:10,1')->post('/enquiries', [EnquiryController::class, 'store']);
+
 /*
 |--------------------------------------------------------------------------
 | Authenticated (any logged-in user) — customers submit here
@@ -53,10 +55,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me',           [AuthController::class, 'me']);
     Route::put('/me',           [MeController::class, 'updateProfile']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
-
-    // Customer-submitted writes — throttled per-user to discourage spam.
-    Route::middleware('throttle:10,1')->post('/reviews',   [ReviewController::class,  'store']);
-    Route::middleware('throttle:10,1')->post('/enquiries', [EnquiryController::class, 'store']);
 
     // Customer dashboard feeds
     Route::get('/me/enquiries',                 [MeController::class, 'enquiries']);

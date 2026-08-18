@@ -15,7 +15,7 @@ class Enquiry extends Model
 
     protected $fillable = [
         'customer_id', 'product_id',
-        'name', 'email', 'phone',
+        'name', 'email', 'phone', 'whatsapp',
         'message', 'admin_reply',
         'status', 'resolved_at', 'replied_at',
     ];
