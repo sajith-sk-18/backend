@@ -27,3 +27,9 @@ yarn-error.log
 .vscode
 .fleet
 *.log
+
+# Dated .env backups (the ".env.backup" rule above is an EXACT match only)
+.env.backup*
+# Local working backups
+*.bak
+vendor.zip
