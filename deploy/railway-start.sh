@@ -28,22 +28,47 @@ php artisan storage:link --force || true
 
 # Wait for the database: on a cold start the app container is often ready before the
 # managed MySQL service accepts connections, and migrate would fail the whole deploy.
+db_ready=0
 for i in $(seq 1 30); do
-  if php -r 'exit(0);' && php artisan db:monitor >/dev/null 2>&1; then
+  if php artisan db:monitor >/dev/null 2>&1; then
+    db_ready=1
     break
   fi
   echo "waiting for database (${i}/30)"
   sleep 2
 done
+if [[ "$db_ready" != "1" ]]; then
+  echo "ERROR: database not reachable after 60s -- check the DB_* variables reference the MySQL service" >&2
+  exit 1
+fi
 
 echo "==> Migrating"
 php artisan migrate --force
 
 # Seed only when the catalogue is empty, so a redeploy never duplicates products.
-if [[ "$(php artisan tinker --execute='echo \App\Models\Product::count();' 2>/dev/null | tail -1)" == "0" ]]; then
-  echo "==> Empty database, seeding"
-  php artisan db:seed --force || true
-fi
+# deploy/db-needs-seed.php rather than `artisan tinker --execute`: psysh swallows exit()
+# and always returns 1, so a tinker-based check reports "populated" even on a fresh
+# database and the catalogue would silently never be seeded.
+#   0 = empty, seed it   1 = already populated   2 = the check itself failed
+set +e
+php deploy/db-needs-seed.php
+seed_rc=$?
+set -e
+case "$seed_rc" in
+  0)
+    echo "==> Empty database, seeding"
+    php artisan db:seed --force
+    ;;
+  1)
+    echo "==> Catalogue already populated, not seeding"
+    ;;
+  *)
+    # Never treat an unreadable database as "already populated" -- that would boot a
+    # working API serving an empty catalogue, which looks like a frontend bug.
+    echo "ERROR: could not determine whether the database needs seeding (rc=${seed_rc})" >&2
+    exit 1
+    ;;
+esac
 
 echo "==> Caching config and routes"
 php artisan config:clear
