@@ -84,12 +84,22 @@ Invisible to customers.
 `fluro-admin.pages.dev` exists as a project but returns **404 "Deployment Not Found"** --
 no deployment is attached to its production branch.
 
-#### Root cause (diagnosed, not yet fixed)
+#### Root cause — CONFIRMED
 
 **Wrangler's production-branch prompt defaults to the current git branch, which is `QA` in
 all three repos.** So a project created interactively records `QA` as its production
 branch. Every later deploy passing `--branch main` therefore does not match, is treated as
 a **preview**, and leaves the apex domain frozen on whatever was production before.
+
+Proven by Wrangler's own output. `fluro-admin` was recreated answering `QA` at the
+production-branch prompt, then deployed with `--branch main`, and Wrangler reported:
+
+```
+✨ Deployment alias URL: https://main.fluro-admin.pages.dev
+```
+
+A `main.` alias, not the apex — i.e. a preview. The storefront deploy did the same.
+Nothing in the success message hints that the live domain was untouched.
 
 This explains all three observations together:
 
@@ -101,21 +111,44 @@ This explains all three observations together:
 
 #### To fix
 
-Deploy with the branch the project actually treats as production -- almost certainly `QA`:
+Deploy each project with the branch **it** treats as production — the two differ, see
+*Branch to use per project* below.
 
 ```bash
 cd admin-panel
 wrangler pages deploy dist --project-name=fluro-admin --branch QA
 
 cd ../customer-site
-wrangler pages deploy dist --project-name=fluro-tech --branch QA
+wrangler pages deploy dist --project-name=fluro-tech --branch <check first>
 ```
 
-Confirm the branch first if in doubt; this prints an **Environment** column per deployment:
+Success is the apex domain changing, not the "Deployment complete" message. Confirm with
+`curl -sI https://fluro-admin.pages.dev/` returning 200 rather than 404, and
+`https://fluro-tech.pages.dev/admin/` returning a 302 rather than serving a nested admin.
 
-```bash
-wrangler pages deployment list --project-name=fluro-tech
-```
+#### The fixed builds are verified working — only the domain aliasing is left
+
+Checked on the preview aliases the deploys produced, so the corrected behaviour is not a
+prediction:
+
+| Check | Result |
+|---|---|
+| `main.fluro-admin.pages.dev/products` direct load | serves the **admin** app, root-relative assets |
+| `main.fluro-admin.pages.dev/enquiries` direct load | same |
+| `main.fluro-tech.pages.dev/admin/` | 302 → `fluro-admin.pages.dev/` |
+| `main.fluro-tech.pages.dev/admin/products` | 302 → `fluro-admin.pages.dev/products` (splat kept) |
+| storefront + prerendered SEO on the new build | intact |
+| admin `x-robots-tag: noindex` | present |
+
+So issue 1 is now purely a matter of pointing the production domains at these builds.
+
+#### Branch to use per project
+
+- **`fluro-admin`** — production branch is **`QA`** (entered at the prompt when it was
+  recreated). Deploy with `--branch QA`.
+- **`fluro-tech`** — **unknown.** Its first-ever deploy became production and no record was
+  kept of the branch. Check before deploying:
+  `wrangler pages deployment list --project-name=fluro-tech`
 
 Both builds are ready on disk and verified: `admin-panel/dist` has root-relative assets
 (`ADMIN_BASE_PATH=/`) plus `_headers`/`_redirects`/`robots.txt`, and `customer-site/dist`
@@ -129,11 +162,15 @@ exposed (see issue 2) and should not be reused: **Create Custom Token** with
 also export `CLOUDFLARE_ACCOUNT_ID=ba197182225c420e0ce495225391cea1` -- a Pages-scoped
 token cannot read the account list, and Wrangler's discovery call 403s without it.
 
-### 2. Cloudflare API token is exposed
+### 2. A fresh Cloudflare API token is needed to deploy
 
-The `wrangler-pages-deploy` token appeared in full in a screenshot shared into the working
-session. **Delete it** (My Profile → API Tokens → ⋯ → Delete) and create a fresh one when
-next needed.
+The exposed `wrangler-pages-deploy` token **has been deleted** — confirmed by Wrangler
+returning `Invalid access token [code: 9109]` on the next deploy attempt. Nothing is
+outstanding security-wise; it simply means deploying now requires a new token.
+
+Create one: **Create Custom Token** → `Account → Cloudflare Pages → Edit`. Also export
+`CLOUDFLARE_ACCOUNT_ID=ba197182225c420e0ce495225391cea1` — a Pages-scoped token cannot read
+the account list, so Wrangler's discovery call 403s without it.
 
 ## Redeploying
 
