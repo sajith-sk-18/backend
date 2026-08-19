@@ -53,6 +53,17 @@ Checked against the live deployments, not assumed:
   comes from an admin uploading an image — its URL should begin with the Railway host,
   not `localhost`. If such an image fails to display, suspect `FILESYSTEM_DISK` or the
   volume mount rather than `APP_URL`.
+- **No stale Vercel deployments remain.** Three projects were serving the app publicly and
+  have been deleted: `admin-panel` (a 72-day-old build against an old API URL) and
+  `customer-site-recovered` plus `customer-site-recovered-nbom` — two indexable duplicates
+  of the storefront, 18 hours old, competing with `fluro-tech.pages.dev` for the same
+  content and pointing at a stale API. All three now return 404. Unrelated Vercel projects
+  (`skillgraph`, `sajith-sk-18-cricketgraph`, `goldloan`) were left untouched.
+
+  Vercel was abandoned because **builds never execute on that account** — every deployment
+  sat in `Queued`, including three attempts that predate this work, while Vercel reported
+  all systems operational. Never diagnosed; if it is ever revisited, start at the account
+  billing/spend-management settings rather than the project config.
 
 ## Known issues
 
@@ -85,16 +96,7 @@ The builds are ready on disk: `admin-panel/dist` (root-relative assets, `ADMIN_B
 and `customer-site/dist` (nested admin removed, `/admin/*` 302s to `fluro-admin.pages.dev`).
 The storefront also needs redeploying for that redirect to take effect.
 
-### 3. Stale Vercel deployment still public
-
-`https://admin-panel-ecru.vercel.app` serves a **72-day-old** admin build pointing at an
-old API URL. Delete that Vercel project so nobody stumbles onto it.
-
-Vercel was abandoned because **builds never execute on that account** — every deployment
-sits in `Queued`, including three attempts that predate this work, while Vercel reported
-all systems operational. Not diagnosed further.
-
-### 4. Cloudflare API token is exposed
+### 3. Cloudflare API token is exposed
 
 The `wrangler-pages-deploy` token appeared in full in a screenshot shared into the working
 session. **Delete it** (My Profile → API Tokens → ⋯ → Delete) and create a fresh one when
