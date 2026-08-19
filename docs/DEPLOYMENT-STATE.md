@@ -8,7 +8,10 @@ As of **2026-08-19**. Records what is live, what is verified, and what is still 
 |---|---|---|
 | **API** | https://backend-production-e5e1.up.railway.app/api | ✅ live, 29 products |
 | **Storefront** | https://fluro-tech.pages.dev | ✅ live |
-| **Admin panel** | https://fluro-tech.pages.dev/admin/ | ⚠️ works, but see *Known issues* |
+| **Admin panel** | https://main.fluro-admin.pages.dev | ✅ live — **this is the admin URL to use** |
+
+`fluro-tech.pages.dev/admin/` also still serves a working copy of the admin from an older
+build, but deep routes there break on refresh. Use the URL above instead.
 
 Admin login: `admin@example.com`. The seeded password `password` has been **changed and
 verified** — see *Verified working*. To change it again, see *Rotating the admin password*.
@@ -16,11 +19,17 @@ verified** — see *Verified working*. To change it again, see *Rotating the adm
 ## Architecture
 
 ```
-Cloudflare Pages (static)            Railway (container)
-  fluro-tech.pages.dev  ──XHR──▶  backend-production-e5e1.up.railway.app
-    /            storefront            php:8.3-apache + Laravel 11
-    /admin/      admin panel           ├── MySQL service (own volume)
-    /products/*  prerendered           └── volume at storage/app/public
+Cloudflare Pages (static)                    Railway (container)
+                                          backend-production-e5e1.up.railway.app
+  fluro-tech.pages.dev          ──XHR──▶     php:8.3-apache + Laravel 11
+    /            storefront                  ├── MySQL service (own volume)
+    /products/*  prerendered                 └── volume at storage/app/public
+                                                  (uploaded product images)
+  main.fluro-admin.pages.dev    ──XHR──▶
+    /*           admin panel
+
+Two Pages PROJECTS, not one site. The admin is reached by its branch alias --
+see Known issues 1.
 ```
 
 - Both frontends are **static builds**; no Node process runs in production.
@@ -72,95 +81,58 @@ Checked against the live deployments, not assumed:
 
 ## Known issues
 
-### 1. `fluro-tech.pages.dev` serves the FIRST build, not the latest
+### 1. Apex domains still serve older builds — ACCEPTED, not fixed
 
-The live storefront is the very first Cloudflare Pages deployment. It works correctly --
-live data, prerendered SEO, no console errors -- but it still contains the **nested admin
-panel** at `/admin/`, and a direct load of `/admin/<route>` serves the storefront bundle
-rather than the admin one. Entering at `/admin/` and clicking through works, because
-routing is client-side from there; only a refresh or a bookmarked deep link breaks.
-Invisible to customers.
+**Decision: use `https://main.fluro-admin.pages.dev` as the admin URL.** It is a stable
+Cloudflare Pages branch alias, fully verified, and needs no further work. Five deploy
+attempts failed to move the *apex* domains, so the alias was adopted instead.
 
-`fluro-admin.pages.dev` exists as a project but returns **404 "Deployment Not Found"** --
-no deployment is attached to its production branch.
+Verified on that URL, against the live API:
 
-#### Root cause — CONFIRMED
+| Check | Result |
+|---|---|
+| `/`, `/products`, `/enquiries`, `/categories`, `/offers` direct load | all 200, admin app |
+| CORS from `https://main.fluro-admin.pages.dev` | allowed |
+| Admin login | 200, token issued |
+
+Consequences to be aware of:
+
+- `fluro-admin.pages.dev` (no `main.`) returns **404** — the project has no production
+  deployment. Harmless, but do not link to it.
+- `fluro-tech.pages.dev/admin/` still serves the **older nested** admin build. It works for
+  click-through use but a deep-route refresh lands on the storefront. Prefer the alias.
+- The storefront apex is the **first** Pages deployment. It is correct and complete — live
+  data, prerendered SEO, no console errors — just one build behind on the admin split.
+
+#### Root cause, for anyone who revisits this
 
 **Wrangler's production-branch prompt defaults to the current git branch, which is `QA` in
-all three repos.** So a project created interactively records `QA` as its production
-branch. Every later deploy passing `--branch main` therefore does not match, is treated as
-a **preview**, and leaves the apex domain frozen on whatever was production before.
+all three repos**, so a project created interactively records `QA` as production. A deploy
+whose `--branch` does not match is treated as a **preview** and leaves the apex untouched.
 
-Proven by Wrangler's own output. `fluro-admin` was recreated answering `QA` at the
-production-branch prompt, then deployed with `--branch main`, and Wrangler reported:
+Proven by Wrangler's own output — `fluro-admin` was recreated answering `QA` at the prompt,
+then deployed with `--branch main`, and Wrangler reported:
 
 ```
 ✨ Deployment alias URL: https://main.fluro-admin.pages.dev
 ```
 
-A `main.` alias, not the apex — i.e. a preview. The storefront deploy did the same.
-Nothing in the success message hints that the live domain was untouched.
+A `main.` alias, not the apex. **Nothing in the "Deployment complete" message indicates the
+live domain was untouched** — that is what made this take five attempts to see. Passing
+`--branch QA` afterwards did not fix it either, and the reason was never established from
+outside; diagnosis was limited to HTTP responses because
+`wrangler pages deployment list --project-name=<p>` was never run. **Start there** — its
+`Environment` column distinguishes "wrong branch" from "deploy silently rejected", which no
+amount of curl can.
 
-This explains all three observations together:
+The likely deterministic fix, if it is ever worth doing: set **Production branch** to `main`
+in each project's *Settings → Builds & deployments* (deployments already exist on `main`),
+then redeploy with `--branch main`.
 
-| Observation | Why |
-|---|---|
-| First storefront deploy reached the apex | it created the project, so it *was* production |
-| Later `--branch main` deploys changed nothing | branch mismatch -> preview, apex untouched |
-| `fluro-admin` apex 404s | created the same way, so it has no production deployment at all |
-
-#### To fix
-
-Deploy each project with the branch **it** treats as production — the two differ, see
-*Branch to use per project* below.
-
-```bash
-cd admin-panel
-wrangler pages deploy dist --project-name=fluro-admin --branch QA
-
-cd ../customer-site
-wrangler pages deploy dist --project-name=fluro-tech --branch <check first>
-```
-
-Success is the apex domain changing, not the "Deployment complete" message. Confirm with
-`curl -sI https://fluro-admin.pages.dev/` returning 200 rather than 404, and
-`https://fluro-tech.pages.dev/admin/` returning a 302 rather than serving a nested admin.
-
-#### The fixed builds are verified working — only the domain aliasing is left
-
-Checked on the preview aliases the deploys produced, so the corrected behaviour is not a
-prediction:
-
-| Check | Result |
-|---|---|
-| `main.fluro-admin.pages.dev/products` direct load | serves the **admin** app, root-relative assets |
-| `main.fluro-admin.pages.dev/enquiries` direct load | same |
-| `main.fluro-tech.pages.dev/admin/` | 302 → `fluro-admin.pages.dev/` |
-| `main.fluro-tech.pages.dev/admin/products` | 302 → `fluro-admin.pages.dev/products` (splat kept) |
-| storefront + prerendered SEO on the new build | intact |
-| admin `x-robots-tag: noindex` | present |
-
-So issue 1 is now purely a matter of pointing the production domains at these builds.
-
-#### Branch to use per project
-
-- **`fluro-admin`** — production branch is **`QA`** (entered at the prompt when it was
-  recreated). Deploy with `--branch QA`.
-- **`fluro-tech`** — **unknown.** Its first-ever deploy became production and no record was
-  kept of the branch. Check before deploying:
-  `wrangler pages deployment list --project-name=fluro-tech`
-
-Both builds are ready on disk and verified: `admin-panel/dist` has root-relative assets
-(`ADMIN_BASE_PATH=/`) plus `_headers`/`_redirects`/`robots.txt`, and `customer-site/dist`
-has 30 prerendered product pages, no nested admin, and `/admin/*` 302ing to
-`fluro-admin.pages.dev` so old bookmarks keep working. Rebuild in **PowerShell**, not Git
-Bash -- see *Redeploying*.
-
-⚠️ Deploying needs a Cloudflare API token. Use a **fresh** one -- the previous token was
-exposed (see issue 2) and should not be reused: **Create Custom Token** with
-`Account -> Cloudflare Pages -> Edit`, and
-also export `CLOUDFLARE_ACCOUNT_ID=ba197182225c420e0ce495225391cea1` -- a Pages-scoped
-token cannot read the account list, and Wrangler's discovery call 403s without it.
+Both corrected builds are ready on disk and verified via their preview aliases:
+`admin-panel/dist` (root-relative assets, `ADMIN_BASE_PATH=/`) and `customer-site/dist`
+(no nested admin; `/admin/*` 302s to `fluro-admin.pages.dev` with the splat preserved).
+Rebuild in **PowerShell**, not Git Bash — see *Redeploying*.
 
 ### 2. A fresh Cloudflare API token is needed to deploy
 
