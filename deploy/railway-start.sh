@@ -70,6 +70,20 @@ case "$seed_rc" in
     ;;
 esac
 
+# Optional admin password reset, driven by ADMIN_PASSWORD. Runs before the caches are
+# rebuilt so a bad hashing config surfaces here rather than at login time. Exit 1 means
+# "nothing to do" (variable unset, or the password already matches), which is not an error.
+if [[ -n "${ADMIN_PASSWORD:-}" ]]; then
+  set +e
+  php deploy/set-admin-password.php
+  pw_rc=$?
+  set -e
+  if [[ "$pw_rc" == "2" ]]; then
+    echo "ERROR: ADMIN_PASSWORD was set but the password could not be applied" >&2
+    exit 1
+  fi
+fi
+
 echo "==> Caching config and routes"
 php artisan config:clear
 php artisan config:cache
