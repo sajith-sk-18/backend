@@ -26,6 +26,10 @@ return [
         // Anchored at both ends: an unanchored pattern would also match a
         // hostile origin such as https://vercel.app.attacker.com.
         '#^https://[a-z0-9-]+\.vercel\.app$#',
+        // Cloudflare Pages: the production domain is <project>.pages.dev and every
+        // branch/preview build gets <hash>.<project>.pages.dev, hence the optional
+        // leading label. Anchored at both ends for the same reason as above.
+        '#^https://([a-z0-9-]+\.)?[a-z0-9-]+\.pages\.dev$#',
     ],
 
     'allowed_headers' => ['*'],
