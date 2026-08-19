@@ -75,5 +75,22 @@ php artisan config:clear
 php artisan config:cache
 php artisan route:cache
 
+# Apache refuses to start at all if more than one MPM is loaded:
+#   AH00534: apache2: Configuration error: More than one MPM loaded.
+# Doing this at BUILD time with a2dismod proved unreliable, so force it here where it
+# always applies to the container that is actually about to run. mod_php requires prefork.
+echo "==> MPM before: $(ls /etc/apache2/mods-enabled/ | grep -i mpm | tr '
+' ' ')"
+rm -f /etc/apache2/mods-enabled/mpm_event.load /etc/apache2/mods-enabled/mpm_event.conf       /etc/apache2/mods-enabled/mpm_worker.load /etc/apache2/mods-enabled/mpm_worker.conf
+if [[ ! -e /etc/apache2/mods-enabled/mpm_prefork.load ]]; then
+  ln -sf /etc/apache2/mods-available/mpm_prefork.load /etc/apache2/mods-enabled/mpm_prefork.load
+  ln -sf /etc/apache2/mods-available/mpm_prefork.conf /etc/apache2/mods-enabled/mpm_prefork.conf
+fi
+echo "==> MPM after:  $(ls /etc/apache2/mods-enabled/ | grep -i mpm | tr '
+' ' ')"
+
+# Surface the real reason rather than a bare exit code if the config is still invalid.
+apache2ctl configtest || true
+
 echo "==> Apache on :${PORT}"
 exec apache2-foreground

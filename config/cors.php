@@ -20,7 +20,13 @@ return [
         'http://127.0.0.1:5176',
     ],
 
-    'allowed_origins_patterns' => [],
+    'allowed_origins_patterns' => [
+        // Vercel gives every production, branch and preview deployment its own
+        // subdomain, so listing exact origins would break on each new preview.
+        // Anchored at both ends: an unanchored pattern would also match a
+        // hostile origin such as https://vercel.app.attacker.com.
+        '#^https://[a-z0-9-]+\.vercel\.app$#',
+    ],
 
     'allowed_headers' => ['*'],
 

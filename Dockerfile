@@ -4,8 +4,8 @@
 # Laravel's own public/.htaccess already handles the front-controller rewrite, so
 # Apache + mod_rewrite needs no routing config of its own.
 #
-# Railway auto-detects this Dockerfile and uses it instead of Nixpacks, which makes the
-# PHP version and extension set explicit rather than inferred.
+# Railway ignored this file and built with Nixpacks until railway.json declared
+# builder: DOCKERFILE explicitly.
 FROM php:8.3-apache
 
 # pdo_mysql for the database; gd for image handling; zip + intl are common Laravel deps.
@@ -14,8 +14,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libpng-dev libjpeg62-turbo-dev libfreetype6-dev libzip-dev libicu-dev unzip git \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j"$(nproc)" pdo_mysql gd zip intl bcmath \
-    && a2enmod rewrite headers \
     && rm -rf /var/lib/apt/lists/*
+
+# Apache modules, deliberately a SEPARATE RUN.
+#
+# Installing packages above can leave both mpm_event and mpm_prefork enabled, and Apache
+# then refuses to start at all: "AH00534: apache2: Configuration error: More than one MPM
+# loaded." mod_php requires prefork, so event and worker are disabled first.
+#
+# a2dismod is separated by ';' not '&&' because it exits non-zero when a module is already
+# disabled. It must NOT be chained with '|| true' onto the RUN above — that would also
+# swallow a genuine docker-php-ext-install failure and produce a silently broken image.
+RUN a2dismod mpm_event mpm_worker 2>/dev/null; \
+    a2enmod mpm_prefork rewrite headers
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
