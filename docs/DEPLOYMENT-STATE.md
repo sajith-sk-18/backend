@@ -2,8 +2,8 @@
 
 As of **2026-08-19**. Records what is live, what is verified, and what is still outstanding.
 
-**Status: complete.** All three parts are deployed and verified, the storefront is verified in
-Google Search Console with its sitemap submitted, and nothing is functionally outstanding.
+**Status: deployed and working.** All three parts are live and verified. Search Console
+setup is NOT finished -- see *Open items*.
 
 ## Live URLs
 
@@ -86,13 +86,18 @@ Checked against the live deployments, not assumed:
   or bookmarked deep link stays in the admin app. That was the original bug.
 - `x-robots-tag: noindex, nofollow, noarchive` on the admin, and CORS accepts its origin.
 - Storefront `/admin/products` 302s to `fluro-admin.pages.dev/products` — splat preserved.
-- **Google Search Console: property verified and `sitemap.xml` submitted** for
-  `https://fluro-tech.pages.dev`, via the HTML-file method
-  (`public/google33fd6ed204d674f4.html`, which ships with every build).
+- The Search Console verification file is live and serving the correct token
+  (`public/google33fd6ed204d674f4.html`, which ships with every build). Confirm with
+  `curl -L`, not a bare status check -- Pages 308-redirects the `.html` URL.
 
 ## Open items
 
-Only one, and it is housekeeping:
+**Finish Google Search Console verification.** The property
+`https://fluro-tech.pages.dev` still shows as **Not verified**, so the sitemap was never
+submitted either and the URL Inspection / Sitemaps tools are not available. An earlier
+attempt failed against the *HTML tag* method, which was never implemented -- use the
+**HTML file** method, whose file is deployed and serving correctly. Until this is done,
+Google has no signal to crawl the site.
 
 **Rotate the Cloudflare API token.** Two tokens have now been pasted in full into a working
 session (`wrangler-pages-deploy`, since deleted, and its replacement). Delete the current
