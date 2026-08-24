@@ -2,8 +2,8 @@
 
 As of **2026-08-19**. Records what is live, what is verified, and what is still outstanding.
 
-**Status: deployed and working.** All three parts are live and verified. Search Console
-setup is NOT finished -- see *Open items*.
+**Status: complete.** All three parts are live and verified, and the storefront is verified
+in Google Search Console with its homepage indexed.
 
 ## Live URLs
 
@@ -86,18 +86,22 @@ Checked against the live deployments, not assumed:
   or bookmarked deep link stays in the admin app. That was the original bug.
 - `x-robots-tag: noindex, nofollow, noarchive` on the admin, and CORS accepts its origin.
 - Storefront `/admin/products` 302s to `fluro-admin.pages.dev/products` — splat preserved.
-- The Search Console verification file is live and serving the correct token
-  (`public/google33fd6ed204d674f4.html`, which ships with every build). Confirm with
-  `curl -L`, not a bare status check -- Pages 308-redirects the `.html` URL.
+- **Google Search Console** (verified 2026-08-24, via the **HTML file** method --
+  `public/google33fd6ed204d674f4.html`, which ships with every build; confirm it with
+  `curl -L`, not a bare status check, because Pages 308-redirects the `.html` URL):
+  - property `https://fluro-tech.pages.dev` **verified**
+  - `sitemap.xml` **submitted** -- 34 URLs, served as `application/xml`, valid, all on the
+    property domain. Console showed *"Couldn't fetch"* immediately after submitting with an
+    empty *Last read*; that means **not yet fetched**, not failed, and clears by itself.
+  - homepage **indexed** ("URL is on Google" / "Page is indexed"), and re-indexing requested
+    after the title change so Google picks up the brand-leading title.
+
+  An earlier verification attempt failed against the **HTML tag** method, which was never
+  implemented on the site -- only the file method was. Use the file.
 
 ## Open items
 
-**Finish Google Search Console verification.** The property
-`https://fluro-tech.pages.dev` still shows as **Not verified**, so the sitemap was never
-submitted either and the URL Inspection / Sitemaps tools are not available. An earlier
-attempt failed against the *HTML tag* method, which was never implemented -- use the
-**HTML file** method, whose file is deployed and serving correctly. Until this is done,
-Google has no signal to crawl the site.
+Nothing blocking. One housekeeping item:
 
 **Rotate the Cloudflare API token.** Two tokens have now been pasted in full into a working
 session (`wrangler-pages-deploy`, since deleted, and its replacement). Delete the current
