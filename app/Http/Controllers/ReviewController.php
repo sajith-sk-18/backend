@@ -8,7 +8,6 @@ use App\Models\Review;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
-use Illuminate\Support\Str;
 
 class ReviewController extends Controller
 {
@@ -24,68 +23,6 @@ class ReviewController extends Controller
         );
     }
 
-    /**
-     * POST /api/reviews  (public, lands as is_approved=false)
-     * Anyone can post a review. Guests supply their own name/email;
-     * logged-in customers have theirs auto-attached. One review per
-     * email per product.
-     */
-    public function store(Request $request): JsonResponse
-    {
-        $user = $request->user();
-
-        $rules = [
-            'product_id' => 'required|exists:products,id',
-            'rating'     => 'required|integer|between:1,5',
-            'comment'    => 'required|string|min:5|max:1000',
-        ];
-        // Guests must identify themselves; logged-in users reuse their account.
-        if (!$user) {
-            $rules['name']  = 'required|string|max:120';
-            $rules['email'] = 'required|email|max:190';
-        }
-        $data = $request->validate($rules);
-
-        $name  = $user?->name  ?? $data['name'];
-        $email = $user?->email ?? $data['email'];
-
-        // One review per email per product (the schema dedupes on
-        // customer_email; a customer_id FK is a future enhancement).
-        $already = Review::where('product_id', $data['product_id'])
-            ->where('customer_email', $email)
-            ->exists();
-        if ($already) {
-            return response()->json([
-                'message' => 'You have already reviewed this product.',
-            ], 422);
-        }
-
-        $review = Review::create([
-            'product_id'     => $data['product_id'],
-            'customer_name'  => $name,
-            'customer_email' => $email,
-            'rating'         => $data['rating'],
-            'comment'        => $data['comment'],
-            'is_approved'    => false,
-        ]);
-
-        // Notify admin
-        $product = Product::find($data['product_id']);
-        Notification::create([
-            'type'        => 'review',
-            'title'       => "New {$review->rating}-star review from {$review->customer_name}",
-            'body'        => Str::limit(($product?->name ? "on \"{$product->name}\" — " : '') . $review->comment, 160),
-            'link'        => '/reviews',
-            'entity_type' => Review::class,
-            'entity_id'   => $review->id,
-        ]);
-
-        return response()->json([
-            'message' => 'Thanks! Your review will appear once approved.',
-            'review'  => $review,
-        ], 201);
-    }
-
     /** GET /api/admin/reviews */
     public function adminIndex(Request $request): JsonResponse
     {
@@ -94,6 +31,56 @@ class ReviewController extends Controller
             $q->where('is_approved', $request->status === 'approved');
         }
         return response()->json($q->paginate(10));
+    }
+
+    /**
+     * POST /api/admin/reviews  (admin)
+     *
+     * Client 16-Sep: the storefront no longer takes reviews from visitors --
+     * the shop writes the two or three it wants shown against each product.
+     * Those are authored here and land APPROVED, so they appear immediately
+     * without a second moderation step.
+     */
+    public function adminStore(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'product_id'     => 'required|exists:products,id',
+            'customer_name'  => 'required|string|max:120',
+            'customer_email' => 'nullable|email|max:190',
+            'rating'         => 'required|integer|min:1|max:5',
+            'comment'        => 'required|string|min:5|max:2000',
+        ]);
+
+        $review = Review::create([
+            'product_id'     => $data['product_id'],
+            'customer_name'  => $data['customer_name'],
+            'customer_email' => $data['customer_email'] ?? null,
+            'rating'         => $data['rating'],
+            'comment'        => $data['comment'],
+            'is_approved'    => true,
+        ]);
+
+        return response()->json($review->load('product:id,name'), 201);
+    }
+
+    /**
+     * PUT /api/admin/reviews/{id}  (admin)
+     *
+     * Editing what is shown, without deleting and re-adding it.
+     */
+    public function adminUpdate(Request $request, int $id): JsonResponse
+    {
+        $review = Review::findOrFail($id);
+
+        $data = $request->validate([
+            'customer_name' => 'sometimes|required|string|max:120',
+            'rating'        => 'sometimes|required|integer|min:1|max:5',
+            'comment'       => 'sometimes|required|string|min:5|max:2000',
+        ]);
+
+        $review->update($data);
+
+        return response()->json($review->load('product:id,name'));
     }
 
     /** POST /api/admin/reviews/{id}/approve */

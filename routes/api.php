@@ -43,7 +43,10 @@ Route::get('/announcements', [AnnouncementController::class,    'index']);
 // Customer-submitted writes — PUBLIC. Guests supply their own name/email in
 // the payload; logged-in users have theirs auto-attached by the controller.
 // Throttled per-IP to discourage spam.
-Route::middleware('throttle:10,1')->post('/reviews',   [ReviewController::class,  'store']);
+//
+// Reviews are NOT public any more (client 16-Sep): the shop authors the ones
+// shown on each product via POST /api/admin/reviews, so there is no visitor
+// submission path and no pending-moderation queue.
 Route::middleware('throttle:10,1')->post('/enquiries', [EnquiryController::class, 'store']);
 
 /*
@@ -99,6 +102,9 @@ Route::middleware(['auth:sanctum', AdminOnly::class])->group(function () {
 
         // Reviews
         Route::get('/reviews', [ReviewController::class, 'adminIndex']);
+        // The shop authors the reviews shown on a product (client 16-Sep).
+        Route::post('/reviews', [ReviewController::class, 'adminStore']);
+        Route::put('/reviews/{id}', [ReviewController::class, 'adminUpdate'])->whereNumber('id');
         Route::post('/reviews/{id}/approve', [ReviewController::class, 'approve'])->whereNumber('id');
         Route::delete('/reviews/{id}', [ReviewController::class, 'destroy'])->whereNumber('id');
 
