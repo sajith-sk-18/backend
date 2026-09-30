@@ -33,3 +33,6 @@ yarn-error.log
 # Local working backups
 *.bak
 vendor.zip
+
+# generated seed dump for a fresh install (php artisan migrate --seed)
+deploy/hostinger/*.sql

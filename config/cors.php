@@ -18,6 +18,11 @@ return [
         'http://127.0.0.1:5175',
         'http://localhost:5176',
         'http://127.0.0.1:5176',
+        // Hostinger single origin (flurotech.in). The live site calls /api on its OWN
+        // origin, so CORS does not apply there at all -- these entries only cover the
+        // www/non-www mismatch and any direct API call from a tool or another page.
+        'https://flurotech.in',
+        'https://www.flurotech.in',
     ],
 
     'allowed_origins_patterns' => [
